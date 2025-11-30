@@ -1,4 +1,7 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,6 +19,16 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int ret = system(cmd);
+    if (ret == -1) {
+        return false;
+    } else {
+        if (WIFEXITED(ret) && WEXITSTATUS(ret) == 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     return true;
 }
@@ -58,6 +71,30 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid = fork();
+    if (pid < 0) {  
+        va_end(args);
+        return false;
+    } else if (pid == 0) { 
+        if (execv(command[0], command) == -1) {
+            _exit(EXIT_FAILURE); 
+        }
+    } else { 
+        int status;
+        if (waitpid(pid, &status, 0) == -1) {
+            va_end(args);
+            return false;
+        }
+        if (WIFEXITED(status)) {
+            if (WEXITSTATUS(status) != 0) {
+                va_end(args);
+                return false;
+            }
+        } else {
+            va_end(args);
+            return false;
+        }
+    }
 
     va_end(args);
 
@@ -92,6 +129,48 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    pid_t pid = fork();
+    if (pid < 0) {
+        va_end(args);
+        return false;
+    } else if (pid == 0) { 
+        FILE *fp = fopen(outputfile, "w");
+        if (fp == NULL) {
+            _exit(EXIT_FAILURE);
+        }
+        int fd = fileno(fp);
+        if (fd < 0) {
+            fclose(fp);
+            _exit(EXIT_FAILURE);
+        }
+        if (dup2(fd, STDOUT_FILENO) < 0) {
+            fclose(fp);
+            _exit(EXIT_FAILURE);
+        }
+        /* close the FILE* now that stdout is redirected; do not close the
+         * underlying fd separately because fclose will close it. */
+        if (fclose(fp) != 0) {
+            _exit(EXIT_FAILURE);
+        }
+        if (execv(command[0], command) == -1) {
+            _exit(EXIT_FAILURE);
+        }
+    } else { 
+        int status;
+        if (waitpid(pid, &status, 0) == -1) {
+            va_end(args);
+            return false;
+        }
+        if (WIFEXITED(status)) {
+            if (WEXITSTATUS(status) != 0) {
+                va_end(args);
+                return false;
+            }
+        } else {
+            va_end(args);
+            return false;
+        }
+    }
 
     va_end(args);
 
