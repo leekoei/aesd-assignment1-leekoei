@@ -5,7 +5,9 @@ else
 CC := gcc
 endif
 
-.PHONY: default clean
+.PHONY: all default clean
+
+all: default
 
 default:
 	$(CC) -o writer writer.c
