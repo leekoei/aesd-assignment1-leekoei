@@ -16,10 +16,19 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef USE_AESD_CHAR_DEVICE
+#define USE_AESD_CHAR_DEVICE 1
+#endif
+
 #define _POSIX_C_SOURCE 200809L
 #define SOCKET_PORT 9000
 #define BUFFER_SIZE 1024
+
+#ifdef USE_AESD_CHAR_DEVICE
+#define FILE_PATH "/dev/aesdchar"
+#else
 #define FILE_PATH "/var/tmp/aesdsocketdata"
+#endif
 
 static const char *pidfile = "/var/run/aesdsocket.pid";
 
@@ -133,36 +142,36 @@ static int install_handlers(void) {
     return 0;
 }
 
-/* The timer thread handler */
-static void timer_thread(union sigval sv) {
-    FILE *file = NULL;
-    char buffer[BUFFER_SIZE];
+// /* The timer thread handler */
+// static void timer_thread(union sigval sv) {
+//     FILE *file = NULL;
+//     char buffer[BUFFER_SIZE];
 
-    /* Open the file to add timestamp */
-    file = fopen(FILE_PATH, "a+");
-    if (file == NULL) {
-        printf("Failed to open file\n");
-        return;
-    }
+//     /* Open the file to add timestamp */
+//     file = fopen(FILE_PATH, "a+");
+//     if (file == NULL) {
+//         printf("Failed to open file\n");
+//         return;
+//     }
 
-    // Obtain the mutex
-    if ( pthread_mutex_lock(&mutex) ) {
-        if (file) fclose(file);
-        return;
-    }
+//     // Obtain the mutex
+//     if ( pthread_mutex_lock(&mutex) ) {
+//         if (file) fclose(file);
+//         return;
+//     }
 
-    /* Format a timestamp string */
-    sprintf(buffer, "timestamp:%s", ctime(&(time_t){time(NULL)}));
-    /* Write the current time to the file */
-    fwrite(buffer, 1, strlen(buffer), file);
-    if (file) fclose(file);
+//     /* Format a timestamp string */
+//     sprintf(buffer, "timestamp:%s", ctime(&(time_t){time(NULL)}));
+//     /* Write the current time to the file */
+//     fwrite(buffer, 1, strlen(buffer), file);
+//     if (file) fclose(file);
 
-    if ( pthread_mutex_unlock(&mutex) ) {
-        return;
-    }
+//     if ( pthread_mutex_unlock(&mutex) ) {
+//         return;
+//     }
 
-    printf("%s", buffer);
-}
+//     printf("%s", buffer);
+// }
 
 int main(int argc, char *argv[])
 {
@@ -193,38 +202,38 @@ int main(int argc, char *argv[])
         write_pidfile();
     }
 
-    /* Start the 10 seconds timer */
-    timer_t timerid;
-    struct sigevent sev;
-    struct itimerspec its, disarm = {0};
-    pthread_attr_t timer_attr;
+    // /* Start the 10 seconds timer */
+    // timer_t timerid;
+    // struct sigevent sev;
+    // struct itimerspec its, disarm = {0};
+    // pthread_attr_t timer_attr;
 
-    pthread_attr_init(&timer_attr);
-    pthread_attr_setdetachstate(&timer_attr, PTHREAD_CREATE_DETACHED);
+    // pthread_attr_init(&timer_attr);
+    // pthread_attr_setdetachstate(&timer_attr, PTHREAD_CREATE_DETACHED);
 
-    memset(&sev, 0, sizeof(sev));
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_notify_function = timer_thread;
-    sev.sigev_notify_attributes = &timer_attr;
-    sev.sigev_value.sival_ptr = NULL;
+    // memset(&sev, 0, sizeof(sev));
+    // sev.sigev_notify = SIGEV_THREAD;
+    // sev.sigev_notify_function = timer_thread;
+    // sev.sigev_notify_attributes = &timer_attr;
+    // sev.sigev_value.sival_ptr = NULL;
 
-    if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1) {
-        printf("Failed to create timer\n");
-        ret = -1;
-        goto exit_syslog;
-    }
-    pthread_attr_destroy(&timer_attr);
+    // if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1) {
+    //     printf("Failed to create timer\n");
+    //     ret = -1;
+    //     goto exit_syslog;
+    // }
+    // pthread_attr_destroy(&timer_attr);
 
-    its.it_value.tv_sec = 10;
-    its.it_value.tv_nsec = 0;
-    its.it_interval.tv_sec = 10;
-    its.it_interval.tv_nsec = 0;
+    // its.it_value.tv_sec = 10;
+    // its.it_value.tv_nsec = 0;
+    // its.it_interval.tv_sec = 10;
+    // its.it_interval.tv_nsec = 0;
 
-    if (timer_settime(timerid, 0, &its, NULL) == -1) {
-        printf("Failed to start timer\n");
-        ret = -2;
-        goto exit_syslog;
-    }
+    // if (timer_settime(timerid, 0, &its, NULL) == -1) {
+    //     printf("Failed to start timer\n");
+    //     ret = -2;
+    //     goto exit_syslog;
+    // }
 
     /* Open a stream socket */
     int socket_server = socket(AF_INET, SOCK_STREAM, 0);
@@ -379,9 +388,9 @@ cleanup_threads:
     if (socket_client >= 0) close(socket_client);
 exit_socket_server:
     if (socket_server >= 0) close(socket_server);
-    /* Delete the timer */
-    timer_settime(timerid, 0, &disarm, NULL);
-    timer_delete(timerid);
+    // /* Delete the timer */
+    // timer_settime(timerid, 0, &disarm, NULL);
+    // timer_delete(timerid);
 exit_syslog:
     closelog();
     remove(FILE_PATH);
